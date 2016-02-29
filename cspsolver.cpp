@@ -8,7 +8,7 @@ template <typename TCSPProblem>
 class CSPSolver
 {
 	public:
-		CSPSolver( TCSPProblem p ): mProblem( p ){}
+		CSPSolver( TCSPProblem p ): mProblem( p ), k(0){}
 
 		typename TCSPProblem::AssignmentType backtrackSearch()
 		{
@@ -18,6 +18,7 @@ class CSPSolver
 			if( var.null ) return mProblem.mVars;
 			else
 			{
+				k += var.currentDomain.size();
 				for( size_t i = 0; i<var.currentDomain.size(); ++i )
 				{
 					var.value = var.currentDomain[i];
@@ -31,6 +32,7 @@ class CSPSolver
 			}
 			return mProblem.failure;
 		}
+		unsigned int k;
 	
 		TCSPProblem mProblem;
 };
@@ -203,6 +205,8 @@ int main( int argc, char* argv[] )
 //	std::cout << sudoku.checkConstraints();
 	solver.backtrackSearch();
 	solver.mProblem.print();
+
+	std::cout << "Number of guesses: " << solver.k << std::endl;
 
 	return 0;
 }
