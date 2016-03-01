@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+unsigned int inferencePasses = 0;
+
 template <typename TCSPProblem>
 class CSPSolver
 {
@@ -12,7 +14,7 @@ class CSPSolver
 
 		typename TCSPProblem::AssignmentType backtrackSearch( TCSPProblem p )
 		{
-			p.inference();
+			p.waterfall();
 //			mProblem.print();
 //			std::cout << "---" << std::endl;
 			typename TCSPProblem::VariableType& var = p.selectVariable();
@@ -94,7 +96,7 @@ class Sudoku
 				}
 			}
 
-			this->inference();
+			this->waterfall();
 		}
 
 		void print()
@@ -113,16 +115,28 @@ class Sudoku
 
 		VariableType& selectVariable()
 		{
+			size_t fi, fj;
+			unsigned int smallestDomain = 10;
 			for(size_t i=0; i<mVars.size(); ++i )
 			{
 				for( size_t j=0; j<mVars[i].size(); ++j )
 				{
 					if(mVars[i][j].isUnassigned())
 					{
-						return mVars[i][j];
+						if( mVars[i][j].currentDomain.size() < 10 )
+						{
+							smallestDomain = mVars[i][j].currentDomain.size();
+							fi = i;
+							fj = j;
+						}
+						//Uncomment the following line to disable MRV.
+						//return mVars[i][j];
 					}
 				}
 			}
+
+			if( smallestDomain < 10 )
+				return mVars[fi][fj];
 			
 			return nullFlag;
 		}
@@ -240,7 +254,40 @@ class Sudoku
 				for( int j=0; j<3; ++j )
 				{
 					inferenceOnBlock(i,j);
+					hiddenSingleBlock(i,j);
 				}
+			}
+
+			pairInferenceRow();
+			pairInferenceCol();
+		}
+
+		bool assignVariables()
+		{
+			bool assigned = false;
+			for( size_t i=0; i<mVars.size(); ++i )
+			{
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					if( mVars[i][j].isUnassigned() && 
+						mVars[i][j].currentDomain.size()==1 )
+					{
+						assigned = true;
+						mVars[i][j].value = mVars[i][j].currentDomain[0];
+					}
+				}
+			}
+			return assigned;
+		}
+
+		void waterfall()
+		{
+			int i=0;
+			inference();
+			while( assignVariables() )
+			{
+				inferencePasses++;
+				inference();
 			}
 		}
 		
@@ -263,6 +310,76 @@ class Sudoku
 				}
 			}
 			return true;
+		}
+
+		void pairInferenceRow()
+		{
+			for( size_t i=0; i<mVars.size(); ++i )
+			{
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					for( size_t k=j+1; k<mVars.size(); ++k )
+					{
+						if( mVars[i][j].currentDomain == mVars[i][k].currentDomain
+								&& mVars[i][k].currentDomain.size() == 2 
+								&& mVars[i][j].isUnassigned()
+								&& mVars[i][k].isUnassigned() )
+						{
+
+							for( size_t m=0; m<mVars.size(); ++m )
+							{
+								if( m != k && m!= j && mVars[i][m].isUnassigned() )
+								{
+									mVars[i][m].currentDomain.erase(
+										std::remove( mVars[i][m].currentDomain.begin(), 
+											mVars[i][m].currentDomain.end(), mVars[i][j].currentDomain[0]), 
+										mVars[i][m].currentDomain.end());
+
+									mVars[i][m].currentDomain.erase(
+										std::remove( mVars[i][m].currentDomain.begin(), 
+											mVars[i][m].currentDomain.end(), mVars[i][j].currentDomain[1]), 
+										mVars[i][m].currentDomain.end());
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		void pairInferenceCol()
+		{
+			for( size_t i=0; i<mVars.size(); ++i )
+			{
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					for( size_t k=j+1; k<mVars.size(); ++k )
+					{
+						if( mVars[j][i].currentDomain == mVars[k][i].currentDomain
+								&& mVars[k][i].currentDomain.size() == 2 
+								&& mVars[j][i].isUnassigned()
+								&& mVars[k][i].isUnassigned() )
+						{
+
+							for( size_t m=0; m<mVars.size(); ++m )
+							{
+								if( m != k && m!= j && mVars[m][i].isUnassigned() )
+								{
+									mVars[m][i].currentDomain.erase(
+										std::remove( mVars[m][i].currentDomain.begin(), 
+											mVars[m][i].currentDomain.end(), mVars[j][i].currentDomain[0]), 
+										mVars[m][i].currentDomain.end());
+
+									mVars[m][i].currentDomain.erase(
+										std::remove( mVars[m][i].currentDomain.begin(), 
+											mVars[m][i].currentDomain.end(), mVars[j][i].currentDomain[1]), 
+										mVars[m][i].currentDomain.end());
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 
 		void inferenceOnBlock( int p, int q )
@@ -293,6 +410,44 @@ class Sudoku
 				}
 			}
 		}
+
+		void hiddenSingleBlock( int p, int q )
+		{
+			std::vector<int> values(9, 0);
+			for( int i=0; i<3; ++i )
+			{
+				for( int j=0; j<3; ++j )
+				{
+					if( mVars[i+p*3][j+q*3].isUnassigned() ) 
+					{
+						for( size_t k =0; k<mVars[i+p*3][j+q*3].currentDomain.size(); ++k )
+						{
+							values[mVars[i+p*3][j+q*3].currentDomain[k]-1]++;
+						}
+					}
+				}
+			}
+
+			for( int v=0; v<values.size(); ++v )
+			{
+				if( values[v] == 1 )
+				{
+					for( int i=0; i<3; ++i )
+					{
+						for( int j=0; j<3; ++j )
+						{
+							if( std::find( mVars[i+p*3][j+q*3].currentDomain.begin(),
+								mVars[i+p*3][j+q*3].currentDomain.end(), v+1) !=
+								mVars[i+p*3][j+q*3].currentDomain.end() )
+							{
+								mVars[i+p*3][j+q*3].currentDomain.clear();
+								mVars[i+p*3][j+q*3].currentDomain.push_back(v+1);
+							}
+						}
+					}
+				}
+			}
+		}
 		VariableType nullFlag;
 };
 
@@ -305,6 +460,7 @@ int main( int argc, char* argv[] )
 	sudoku.print();
 
 	std::cout << "Number of guesses: " << solver.k << std::endl;
+	std::cout << "Difficulty: " << inferencePasses << std::endl;
 
 	return 0;
 }
