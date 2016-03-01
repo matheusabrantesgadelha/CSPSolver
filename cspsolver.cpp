@@ -10,21 +10,22 @@ class CSPSolver
 	public:
 		CSPSolver( TCSPProblem p ): mProblem( p ), k(0){}
 
-		typename TCSPProblem::AssignmentType backtrackSearch()
+		typename TCSPProblem::AssignmentType backtrackSearch( TCSPProblem p )
 		{
+			p.inference();
 //			mProblem.print();
 //			std::cout << "---" << std::endl;
-			typename TCSPProblem::VariableType& var = mProblem.selectVariable();
-			if( var.null ) return mProblem.mVars;
+			typename TCSPProblem::VariableType& var = p.selectVariable();
+			if( var.null ) return p.mVars;
 			else
 			{
 				k += var.currentDomain.size();
 				for( size_t i = 0; i<var.currentDomain.size(); ++i )
 				{
 					var.value = var.currentDomain[i];
-					if( mProblem.checkConstraints() )
+					if( p.checkConstraints() )
 					{
-						typename TCSPProblem::AssignmentType sol = backtrackSearch();
+						typename TCSPProblem::AssignmentType sol = backtrackSearch( p );
 						if( sol.size() != mProblem.failure.size() ) return sol;
 					}
 					var.value = TCSPProblem::VariableType::unassigned;
@@ -93,6 +94,7 @@ class Sudoku
 				}
 			}
 
+			this->inference();
 		}
 
 		void print()
@@ -174,6 +176,73 @@ class Sudoku
 
 			return true;
 		}
+
+		void inference()
+		{
+			std::vector<int> values(9,0);
+
+			//Rows
+			for( size_t i=0; i< mVars.size(); ++i )
+			{
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					if(mVars[i][j].isUnassigned()) continue;
+					values[mVars[i][j].value-1]++;
+				}
+
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					for( size_t k=0; k<values.size(); ++k )
+					{
+						if( values[k] > 0 )
+						{
+							mVars[i][j].currentDomain.erase(
+								std::remove( mVars[i][j].currentDomain.begin(), 
+									mVars[i][j].currentDomain.end(), k+1), 
+								mVars[i][j].currentDomain.end());
+						}
+					}
+				}
+
+				for( size_t j=0; j<values.size(); ++j )
+					values[j] = 0;
+			}
+
+			//Cols
+			for( size_t i=0; i< mVars.size(); ++i )
+			{
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					if(mVars[j][i].isUnassigned()) continue;
+					values[mVars[j][i].value-1]++;
+				}
+
+				for( size_t j=0; j<mVars.size(); ++j )
+				{
+					for( size_t k=0; k<values.size(); ++k )
+					{
+						if( values[k] > 0 )
+						{
+							mVars[j][i].currentDomain.erase(
+								std::remove( mVars[j][i].currentDomain.begin(), 
+									mVars[j][i].currentDomain.end(), k+1), 
+								mVars[j][i].currentDomain.end());
+						}
+					}
+				}
+
+				for( size_t j=0; j<values.size(); ++j )
+					values[j] = 0;
+			}
+
+			for( int i=0; i<3; ++i )
+			{
+				for( int j=0; j<3; ++j )
+				{
+					inferenceOnBlock(i,j);
+				}
+			}
+		}
 		
 	private:
 		bool checkBlock(int p, int q)
@@ -195,6 +264,35 @@ class Sudoku
 			}
 			return true;
 		}
+
+		void inferenceOnBlock( int p, int q )
+		{
+			std::vector<int> values (9, 0);
+			for( int i=0; i<3; ++i )
+			{
+				for( int j=0; j<3; ++j )
+				{
+					if( mVars[i+p*3][j+q*3].isUnassigned() ) continue;
+					values[mVars[i+p*3][j+q*3].value-1]++;
+				}
+			}
+			for( int i=0; i<3; ++i )
+			{
+				for( int j=0; j<3; ++j )
+				{
+					for( size_t k=0; k<values.size(); ++k )
+					{
+						if( values[k] > 0 )
+						{
+							mVars[i+p*3][j+q*3].currentDomain.erase(
+								std::remove( mVars[i+p*3][j+q*3].currentDomain.begin(), 
+									mVars[i+p*3][j+q*3].currentDomain.end(), k+1), 
+								mVars[i+p*3][j+q*3].currentDomain.end());
+						}
+					}
+				}
+			}
+		}
 		VariableType nullFlag;
 };
 
@@ -203,8 +301,8 @@ int main( int argc, char* argv[] )
 	Sudoku sudoku( argv[1] );
 	CSPSolver<Sudoku> solver( sudoku );
 //	std::cout << sudoku.checkConstraints();
-	solver.backtrackSearch();
-	solver.mProblem.print();
+	sudoku.mVars = solver.backtrackSearch( sudoku );
+	sudoku.print();
 
 	std::cout << "Number of guesses: " << solver.k << std::endl;
 
