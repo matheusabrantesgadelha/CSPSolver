@@ -4,20 +4,24 @@
 #include <string>
 #include <vector>
 
-unsigned int inferencePasses = 0;
+unsigned int difficulty = 0;
 
 template <typename TCSPProblem>
 class CSPSolver
 {
 	public:
-		CSPSolver( TCSPProblem p ): mProblem( p ), k(0){}
+		CSPSolver( TCSPProblem p ): mProblem( p ), 
+			k(0), mSolution(p), mrv(true), waterfall(true)
+		{
+
+		}
 
 		typename TCSPProblem::AssignmentType backtrackSearch( TCSPProblem p )
 		{
-			p.waterfall();
+			if(waterfall) p.waterfall();
 //			mProblem.print();
 //			std::cout << "---" << std::endl;
-			typename TCSPProblem::VariableType& var = p.selectVariable();
+			typename TCSPProblem::VariableType& var = p.selectVariable( mrv );
 			if( var.null ) return p.mVars;
 			else
 			{
@@ -35,9 +39,22 @@ class CSPSolver
 			}
 			return mProblem.failure;
 		}
+
+		TCSPProblem solve()
+		{
+			k=0;
+			difficulty = 0;
+			mSolution.mVars = mProblem.mVars;
+			mSolution.mVars = backtrackSearch( mSolution );
+			return mSolution;
+		}
+
 		unsigned int k;
+		bool mrv;
+		bool waterfall;
 	
 		TCSPProblem mProblem;
+		TCSPProblem mSolution;
 };
 
 class Sudoku
@@ -96,7 +113,6 @@ class Sudoku
 				}
 			}
 
-			this->waterfall();
 		}
 
 		void print()
@@ -113,7 +129,7 @@ class Sudoku
 			}
 		}
 
-		VariableType& selectVariable()
+		VariableType& selectVariable( bool isMrv )
 		{
 			size_t fi, fj;
 			unsigned int smallestDomain = 10;
@@ -123,19 +139,20 @@ class Sudoku
 				{
 					if(mVars[i][j].isUnassigned())
 					{
-						if( mVars[i][j].currentDomain.size() < 10 )
+						if( !isMrv ) return mVars[i][j];
+
+						if( mVars[i][j].currentDomain.size() < 10 && 
+								mVars[i][j].currentDomain.size() > 0 )
 						{
 							smallestDomain = mVars[i][j].currentDomain.size();
 							fi = i;
 							fj = j;
 						}
-						//Uncomment the following line to disable MRV.
-						//return mVars[i][j];
 					}
 				}
 			}
 
-			if( smallestDomain < 10 )
+			if( smallestDomain < 10 && isMrv)
 				return mVars[fi][fj];
 			
 			return nullFlag;
@@ -285,10 +302,7 @@ class Sudoku
 			int i=0;
 			inference();
 			while( assignVariables() )
-			{
-				inferencePasses++;
 				inference();
-			}
 		}
 		
 	private:
@@ -339,6 +353,8 @@ class Sudoku
 										std::remove( mVars[i][m].currentDomain.begin(), 
 											mVars[i][m].currentDomain.end(), mVars[i][j].currentDomain[1]), 
 										mVars[i][m].currentDomain.end());
+
+									difficulty++;
 								}
 							}
 						}
@@ -374,6 +390,8 @@ class Sudoku
 										std::remove( mVars[m][i].currentDomain.begin(), 
 											mVars[m][i].currentDomain.end(), mVars[j][i].currentDomain[1]), 
 										mVars[m][i].currentDomain.end());
+
+									difficulty++;
 								}
 							}
 						}
@@ -405,6 +423,8 @@ class Sudoku
 								std::remove( mVars[i+p*3][j+q*3].currentDomain.begin(), 
 									mVars[i+p*3][j+q*3].currentDomain.end(), k+1), 
 								mVars[i+p*3][j+q*3].currentDomain.end());
+
+							difficulty++;
 						}
 					}
 				}
@@ -442,6 +462,8 @@ class Sudoku
 							{
 								mVars[i+p*3][j+q*3].currentDomain.clear();
 								mVars[i+p*3][j+q*3].currentDomain.push_back(v+1);
+
+								difficulty++;
 							}
 						}
 					}
@@ -456,11 +478,34 @@ int main( int argc, char* argv[] )
 	Sudoku sudoku( argv[1] );
 	CSPSolver<Sudoku> solver( sudoku );
 //	std::cout << sudoku.checkConstraints();
-	sudoku.mVars = solver.backtrackSearch( sudoku );
-	sudoku.print();
+//	sudoku.mVars = solver.backtrackSearch( sudoku );
 
+	std::cout << "============================" << std::endl;
+	std::cout << argv[1] << std::endl;
+	std::cout << "============================" << std::endl;
+
+//	std::cout << "Using MRV w/ waterfall infereces" << std::endl;
+//	solver.mrv = true;
+//	solver.waterfall = true;
+//	solver.solve().print();
+//	std::cout << "Number of guesses: " << solver.k << std::endl;
+//	std::cout << "---" << std::endl;
+//
+	std::cout << "Using MRV" << std::endl;
+	solver.mrv = true;
+	solver.waterfall = false;
+	solver.solve().print();
 	std::cout << "Number of guesses: " << solver.k << std::endl;
-	std::cout << "Difficulty: " << inferencePasses << std::endl;
+	std::cout << "---" << std::endl;
+
+//	std::cout << "Without MRV" << std::endl;
+//	solver.mrv = false;
+//	solver.waterfall = false;
+//	solver.solve().print();
+//	std::cout << "Number of guesses: " << solver.k << std::endl;
+//	std::cout << "---" << std::endl;
+
+	std::cout << "Difficulty: " << difficulty << std::endl;
 
 	return 0;
 }
